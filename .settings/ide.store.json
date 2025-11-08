@@ -1,0 +1,7 @@
+{
+  "board": "NUCLEO-L152RE",
+  "device": "STM32L152RET6",
+  "core": "Cortex-M3",
+  "order": 0,
+  "toolchain": "GCC"
+}
