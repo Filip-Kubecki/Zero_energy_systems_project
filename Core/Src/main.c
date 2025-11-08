@@ -263,6 +263,11 @@ int main(void)
 
 	sep(); // Linia do oddzielnenia kolejnych komunikatów UART
 
+  // I2C reseet
+  HDC3022_general_call_reset();
+  // Soft reset czujnika wilgotności
+  HDC3022_soft_reset();
+
   // Zczytaj identyfikator i rewizje czujnika temperatury - TMP119
 	temperature_sensor_ID();
 
@@ -275,8 +280,6 @@ int main(void)
   // Inicjalizacja pracy w trybie 1 [Hz]
 	pressure_sensor_init();
 
-  // Soft reset czujnika wilgotności
-  HDC3022_soft_reset();
   // Zczytaj identyfikator producenta czujnika wilgotności - HDC3022-Q1
   humidity_sensor_read_id();
 

@@ -95,7 +95,7 @@ HAL_StatusTypeDef HDC3022_read_humidity_and_temperature(float* humidity, float* 
 	status = HAL_I2C_Master_Transmit(
 		&hi2c1,
 		HDC3022_Q1_I2C_ADDR,
-		(uint8_t[]) HDC3022_REG_MANUFACTURER_ID,
+		(uint8_t[]) HDC3022_CMD_TRIG_MEAS_LPM3,
 		2,
 		HAL_MAX_DELAY
 	);
@@ -159,4 +159,35 @@ HAL_StatusTypeDef HDC3022_soft_reset(){
 	HAL_Delay(HDC3022_MEAS_DELAY_LPM3);
 
 	return HAL_OK;
+}
+
+/**
+ ******************************************************************************
+ * @brief  Wysyła komendę I2C General Call Reset.
+ * @warning Resetuje wszystkie urządzenia na magistrali wspierające tę komendę.
+ ******************************************************************************
+ */
+#define I2C_GENERAL_CALL_ADDR (0x00 << 1) // Adres ogólny I2C (0x00)
+#define I2C_GENERAL_CALL_RESET_CMD 0x06   // Bajt komendy resetu
+
+HAL_StatusTypeDef HDC3022_general_call_reset(){
+    HAL_StatusTypeDef status;
+    uint8_t cmd_buf = I2C_GENERAL_CALL_RESET_CMD; // Komenda to 0x06
+
+    // Wysyłamy 1 bajt (0x06) na adres 0x00 (General Call)
+    status = HAL_I2C_Master_Transmit(
+        &hi2c1,
+        I2C_GENERAL_CALL_ADDR, // Użyj adresu 0x00
+        &cmd_buf,              // Wskaźnik na komendę
+        1,                     // Rozmiar danych to 1 bajt
+        HAL_MAX_DELAY
+    );
+
+    // Po resecie warto krótko zaczekać, podobnie jak przy soft resecie
+    if (status == HAL_OK)
+    {
+        HAL_Delay(5); // Użyj opóźnienia zdefiniowanego dla soft resetu
+    }
+    
+    return status;
 }

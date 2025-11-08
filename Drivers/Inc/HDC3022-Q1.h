@@ -52,4 +52,14 @@ HAL_StatusTypeDef HDC3022_read_humidity_and_temperature(float* humidity, float* 
  */
 HAL_StatusTypeDef HDC3022_soft_reset();
 
+/**
+ ******************************************************************************
+ * @brief  Wysyła komendę I2C General Call Reset (0x06) na adres ogólny (0x00).
+ * @warning Ta komenda zresetuje WSZYSTKIE urządzenia na magistrali I2C,
+ * które wspierają tę funkcję, nie tylko czujnik HDC302x.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
+HAL_StatusTypeDef HDC3022_general_call_reset();
+
 #endif /* INC_HDC3022_Q1_H_ */
