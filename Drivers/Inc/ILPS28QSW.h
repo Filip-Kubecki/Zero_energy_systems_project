@@ -20,16 +20,43 @@
 
 // Deklaracje funkcji
 
-// Inicjuje czujnik w trybie pracy 1 [Hz]
+/**
+ ******************************************************************************
+ * @brief  Inicjuje czujnik i ustawia go w tryb pomiaru ciągłego 1 Hz.
+ * @note   Zapisuje domyślną konfigurację (tryb 1 Hz) do rejestru CTRL_REG1.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
 HAL_StatusTypeDef ILPS28QSW_init();
 
-// Odczyt zawartości rejestru Device_ID - zawiera rewizję oraz ID urządzenia
+/**
+ ******************************************************************************
+ * @brief  Odczytuje 8-bitowy identyfikator urządzenia (WHO_AM_I).
+ * @note   Odczytuje rejestr o adresie 0x0F.
+ * @param  device_id Wskaźnik do zmiennej (uint8_t), w której zostanie zapisane ID.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
 HAL_StatusTypeDef ILPS28QSW_read_who_am_i(uint8_t* device_id);
 
-// Odczyt zawartości rejestrów CTRL_REG 1-3 - zawiera dane na temat działania urządzenia
+/**
+ ******************************************************************************
+ * @brief  Odczytuje zawartość 3 rejestrów kontrolnych (CTRL_REG1, CTRL_REG2, CTRL_REG3).
+ * @note   Rozpoczyna odczyt od adresu 0x10 i czyta dane z niego oraz 2 kolejnych rejestrów.
+ * @param  ctrl_reg_data Wskaźnik do 3-elementowej tablicy (uint8_t), w której zostaną zapisane dane.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
 HAL_StatusTypeDef ILPS28QSW_read_ctrl_regs(uint8_t* ctrl_reg_data);
 
-// Odczyt mierzonego ciśnienia z 3 rejestrów - PRESS_OUT_H, PRESS_OUT_H, PRESS_OUT_XL
+/**
+ ******************************************************************************
+ * @brief  Odczytuje surowe ciśnienie (3 bajty) i konwertuje je na hPa (float).
+ * @note   Odczytuje rejestry PRESS_OUT (od 0x28) i przelicza na wartość fizyczną.
+ * @param  pressure Wskaźnik do zmiennej (float), w której zostanie zapisane ciśnienie w hPa.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
 HAL_StatusTypeDef ILPS28QSW_read_pressure(float* pressure);
 
 

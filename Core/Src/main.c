@@ -90,7 +90,7 @@ void sep(){
 void temperature_sensor_ID(){
 	uint16_t device_id_16b;		// Zmienna przetrzymująca odczyt z rejestru Device_ID
 
-	HAL_StatusTypeDef status_id = tmp119_read_device_id(&device_id_16b);
+	HAL_StatusTypeDef status_id = TMP119_read_device_id(&device_id_16b);
 
 	if (status_id == HAL_OK){
 	// Usunięcie 3 pierwszych bitów - pozostawienie ID urządzenia
@@ -119,7 +119,7 @@ void temperature_sensor_ID(){
 };
 
 void temperature_sensor_read_temperature(float* temp){
-	HAL_StatusTypeDef status = tmp119_read_temperature(temp);
+	HAL_StatusTypeDef status = TMP119_read_temperature(temp);
 
 	if (status == HAL_OK){
 		sprintf(UART_TX_BUFFER, "Temperature: %.2f C\r\n", *temp);

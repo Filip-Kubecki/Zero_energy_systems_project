@@ -1,7 +1,20 @@
-#include "tmp119.h"
+/**
+ * TMP119.c
+ * @brief   Plik implementacyjny dla sterownika I2C czujnika temperatury TMP119.
+ *
+ * @description
+ * Ten plik implementuje funkcje zadeklarowane w tmp119.h.
+ *
+ * Obsługuje on niskopoziomową komunikację (I2C) wymaganą do
+ * odczytu danych z czujnika TMP119, w tym odczyt ID urządzenia
+ * oraz odczyt temperatury. Zawiera również formułę konwersji
+ * surowych danych na stopnie Celsjusza.
+ *
+ */
+#include "TMP119.h"
 
 // Definicje adresów
-#define TMP119_I2C_ADDR	(0x48 << 1)	// Adres I2C czujnika temepratury
+#define TMP119_I2C_ADDR	(0x48 << 1)	// Adres I2C urządzenia
 #define TMP119_REG_TEMP	0x00		// Adres rejestru przechowującym wartość temperatury
 #define TMP119_DEV_ID	0x0F		// Adres rejestru zawierającego
 
@@ -10,7 +23,15 @@
 // Żeby nie zgłupiał bo nie wie gdzie co jest
 extern I2C_HandleTypeDef hi2c1;
 
-HAL_StatusTypeDef tmp119_read_device_id(uint16_t* device_id){
+/**
+ ******************************************************************************
+ * @brief  Odczytuje 16-bitowy identyfikator urządzenia (Device ID).
+ * @note   Odczytuje 2 bajty z rejestru o adresie 0x0F.
+ * @param  device_id Wskaźnik do zmiennej (uint16_t), w której zostanie zapisane ID.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
+HAL_StatusTypeDef TMP119_read_device_id(uint16_t* device_id){
     uint8_t i2c_rx_buffer[2]; // Bufor wejściowy dla komunikacji I2C
 
     // Odczytanie 2 bitów z rejestru Device_ID poprzez I2C - odczyt zapisany w buforze
@@ -32,7 +53,15 @@ HAL_StatusTypeDef tmp119_read_device_id(uint16_t* device_id){
     return status;
 }
 
-HAL_StatusTypeDef tmp119_read_temperature(float* temperature_c){
+/**
+ ******************************************************************************
+ * @brief  Odczytuje 16-bitową surową wartość temperatury i konwertuje ją na °C (float).
+ * @note   Odczytuje 2 bajty z rejestru temperatury (0x00) i mnoży wynik przez 0.0078125.
+ * @param  temperature_c Wskaźnik do zmiennej (float), w której zostanie zapisana temperatura w °C.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
+HAL_StatusTypeDef TMP119_read_temperature(float* temperature_c){
     uint8_t i2c_rx_buffer[2];
 
     // Odczytanie 2 bitów z rejestru Device_ID poprzez I2C - odczyt zapisany w buforze

@@ -15,7 +15,7 @@
  */
 #include "ILPS28QSW.h"
 
-#define ILPS28QSW_I2C_ADDR				(0x5C << 1)	// Adres I2C czujnika 
+#define ILPS28QSW_I2C_ADDR				(0x5C << 1)	// Adres I2C urządzenia
 #define ILPS28QSW_
 #define ILPS28QSW_WHO_AM_I				0x0F		// Adres rejestru zawierającego numer ID urządzenia (powinno wynosić)
 #define ILPS28QSW_CTRL_REG_START		0x10		// Adres rejestru CTRL_REG1 - kolejne 3 rejestry to rejestry CTRL1-3
@@ -27,7 +27,13 @@
 // Oznajmia że handler komunikacji I2C istnieje ale w innym pliku - w tym przypadku w main.c
 extern I2C_HandleTypeDef hi2c1;
 
-// Inicjalizacja pracy sensora w trybie pomiaru z częstotliwością 1 [Hz]
+/**
+ ******************************************************************************
+ * @brief  Inicjalizuje czujnik i ustawia go w tryb pomiaru ciągłego z częstotliwością 1 Hz.
+ * @note   Zapisuje wartość 0x10 (tryb 1 Hz) do rejestru CTRL_REG1 (0x10).
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
 HAL_StatusTypeDef ILPS28QSW_init(){
     uint8_t tx_buffer = 0x10; // Powinno być chyba 0x10
 
@@ -45,7 +51,14 @@ HAL_StatusTypeDef ILPS28QSW_init(){
     return status;
 }
 
-// Odczyt rejestru WHO_AM_I zawierającego identyfikator urzadzenia
+/**
+ ******************************************************************************
+ * @brief  Odczytuje 8-bitowy identyfikator urządzenia (WHO_AM_I).
+ * @note   Odczytuje rejestr o adresie 0x0F.
+ * @param  device_id Wskaźnik do zmiennej (uint8_t), w której zostanie zapisane ID.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
 HAL_StatusTypeDef ILPS28QSW_read_who_am_i(uint8_t* device_id){
     uint8_t i2c_rx_buffer; // Bufor wejściowy dla komunikacji I2C - tu zapisane są dane
 
@@ -68,7 +81,14 @@ HAL_StatusTypeDef ILPS28QSW_read_who_am_i(uint8_t* device_id){
     return status;
 }
 
-// Odczyt rejestrów CTRL_REG1, CTRL_REG2, CTRL_REG3
+/**
+ ******************************************************************************
+ * @brief  Odczytuje zawartość 3 rejestrów kontrolnych (CTRL_REG1, 2, 3).
+ * @note   Rozpoczyna odczyt od adresu CTRL_REG_START (0x10) i czyta 3 kolejne bajty.
+ * @param  ctrl_reg_data Wskaźnik do 3-elementowej tablicy (uint8_t), w której zostaną zapisane dane.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
 HAL_StatusTypeDef ILPS28QSW_read_ctrl_regs(uint8_t* ctrl_reg_data){
 	HAL_StatusTypeDef status = HAL_I2C_Mem_Read(
 	        &hi2c1,
@@ -83,6 +103,16 @@ HAL_StatusTypeDef ILPS28QSW_read_ctrl_regs(uint8_t* ctrl_reg_data){
 	    return status;
 };
 
+/**
+ ******************************************************************************
+ * @brief  Odczytuje 3 bajty surowego ciśnienia i konwertuje je na hPa (float).
+ * @note   Dane są odczytywane z rejestrów PRESS_OUT (0x28, 0x29, 0x2A)
+ * i konwertowane na 24-bitową wartość ze znakiem. Później przelicza się
+ * wartość na hPa dzieląc wartość 24-bitową przez 4096.
+ * @param  pressure Wskaźnik do zmiennej (float), w której zostanie zapisane ciśnienie w hPa.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
 HAL_StatusTypeDef ILPS28QSW_read_pressure(float* pressure){
 	uint8_t pressure_reading[3];
 
