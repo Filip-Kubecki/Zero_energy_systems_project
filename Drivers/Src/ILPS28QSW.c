@@ -14,6 +14,7 @@
  *
  */
 #include "ILPS28QSW.h"
+#include <stdint.h>
 
 #define ILPS28QSW_I2C_ADDR				(0x5C << 1)	// Adres I2C urządzenia
 #define ILPS28QSW_
@@ -22,6 +23,9 @@
 #define ILPS28QSW_PRESS_OUT_REG_START	0x28		// Adres pierwszego rejestru zawierającego odczyt ciśnienia
 													// kolejne 2 rejestry zawierają kolejne części odczytu (wyższe bity)
 													// [PRESS_OUT_H, PRESS_OUT_L, PRESS_OUT_XL]
+#define ILPS28QSW_TEMP_OUT_REGS			0x2B		// Adres pierwszego rejestru zawierającego odczyt temperatury
+													// kolejny rejestr zawiera kolejną część odczytu
+													// [TEMP_OUT_L, TEMP_OUT_H]
 
 // Powiązanie z handlerem I2C znajdującym się w pliku main.c
 // Oznajmia że handler komunikacji I2C istnieje ale w innym pliku - w tym przypadku w main.c
@@ -119,15 +123,16 @@ HAL_StatusTypeDef ILPS28QSW_read_pressure(float* pressure){
 	HAL_StatusTypeDef status = HAL_I2C_Mem_Read(
 		&hi2c1,
 		ILPS28QSW_I2C_ADDR,
-		ILPS28QSW_PRESS_OUT_REG_START, // Zacznij od 0x28 (LSB)
+		ILPS28QSW_PRESS_OUT_REG_START, // Zacznij od (LSB)
 		I2C_MEMADD_SIZE_8BIT,
-		pressure_reading, // Nazwa tablicy jest już wskaźnikiem
-		3,                // Odczytaj 3 bajty na raz
+		pressure_reading,
+		3,
 		HAL_MAX_DELAY
 	);
 
+	// Jeżeli udało się odczytać wartość to przejdź do jej konwersji
 	if (status == HAL_OK) {
-		// Poprawka 3: Poprawna kolejność bajtów
+		// Poprawna kolejność bajtów
 		// pressure_reading[0] = XL (Least Significant Byte)
 		// pressure_reading[1] = L
 		// pressure_reading[2] = H (Most Significant Byte)
@@ -135,6 +140,9 @@ HAL_StatusTypeDef ILPS28QSW_read_pressure(float* pressure){
 										  (pressure_reading[1] << 8)  |
 										   pressure_reading[0];
 
+		// Korekacja zapisu U2
+		// Gdyż zapisujemy 24 bitową liczbę na 32 bitach
+		// To należy wypełnić nieużywane bity jedynkami
 		if (pressure_value & 0x00800000) {
 			pressure_value |= 0xFF000000;
 		}
@@ -146,3 +154,29 @@ HAL_StatusTypeDef ILPS28QSW_read_pressure(float* pressure){
 	return status;
 };
 
+
+HAL_StatusTypeDef ILPS28QSW_read_temp(float* temp){
+	uint8_t temp_reading[2];
+
+	HAL_StatusTypeDef status = HAL_I2C_Mem_Read(
+		&hi2c1,
+		ILPS28QSW_I2C_ADDR,
+		ILPS28QSW_TEMP_OUT_REGS,
+		I2C_MEMADD_SIZE_8BIT,
+		temp_reading,
+		2,
+		HAL_MAX_DELAY
+	);
+
+	// Jeżeli udało się odczytać wartość to przejdź do jej konwersji
+	if (status == HAL_OK) {
+		// Połącz dane z 2 bajtów do 16 bitowego odczytu
+		int16_t temp_value = (int16_t)(temp_reading[1] << 8)  | temp_reading[0];
+
+		*temp = (float)temp_value / 100.0f;
+	} else {
+		*temp = 0.0f;
+	}
+
+	return status;
+}

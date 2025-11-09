@@ -17,6 +17,7 @@
 #define ILPS28QSW_H_
 
 #include "stm32l1xx_hal.h"
+#include "stm32l1xx_hal_def.h"
 
 // Deklaracje funkcji
 
@@ -58,6 +59,16 @@ HAL_StatusTypeDef ILPS28QSW_read_ctrl_regs(uint8_t* ctrl_reg_data);
  ******************************************************************************
  */
 HAL_StatusTypeDef ILPS28QSW_read_pressure(float* pressure);
+
+/**
+ ******************************************************************************
+ * @brief  Odczytuje surową temperaturę (2 bajty) i konwertuje ją na deg C (float).
+ * @note   Odczytuje rejestry TEMP_OUT (od 0x2B) i przelicza na wartość fizyczną.
+ * @param  temp Wskaźnik do zmiennej (float), w której zostanie zapisana temperatura w deg C.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
+HAL_StatusTypeDef ILPS28QSW_read_temp(float* temp);
 
 
 #endif /* ILPS28QSW_H_ */

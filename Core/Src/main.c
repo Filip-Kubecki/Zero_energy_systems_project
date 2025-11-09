@@ -87,6 +87,7 @@ void sep(){
 	HAL_UART_Transmit(&huart2, (uint8_t*)"------------------\r\n", 20, HAL_MAX_DELAY);
 };
 
+// CZUJNIK TEMPERATURY ---------------------------------------------------------
 void temperature_sensor_ID(){
 	uint16_t device_id_16b;		// Zmienna przetrzymująca odczyt z rejestru Device_ID
 
@@ -131,6 +132,7 @@ void temperature_sensor_read_temperature(float* temp){
 	}
 };
 
+// CZUJNIK CIŚNIENIA -----------------------------------------------------------
 void pressure_sensor_ID(){
 	uint8_t device_id;		// Zmienna przetrzymująca odczyt z rejestru Device_ID
 	HAL_StatusTypeDef status_id = ILPS28QSW_read_who_am_i(&device_id);
@@ -185,17 +187,32 @@ void pressure_sensor_read_pressure(float* pressure){
 	}
 }
 
+void pressure_sensor_read_temp(float* temp){
+	HAL_StatusTypeDef status = ILPS28QSW_read_temp(temp);
+//	HAL_StatusTypeDef status = HAL_OK;
+
+	if (status == HAL_OK){
+		sprintf(UART_TX_BUFFER, "Temp: %.2f C\r\n", *temp);
+		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
+	}
+	else{
+		// W przypadku gdy nie uda się odczytać danych przez I2C
+		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n", 18, HAL_MAX_DELAY);
+	}
+}
+
 void pressure_sensor_init(){
 	HAL_StatusTypeDef status_init = ILPS28QSW_init();
 
 	if (status_init == HAL_OK){
 		// Jeśli inicjalizacja się nie powiodła, wyświetl błąd
-		HAL_UART_Transmit(&huart2, (uint8_t*)"Pressure INIT complete\r\n", 24, HAL_MAX_DELAY);
+		HAL_UART_Transmit(&huart2, (uint8_t*)"Pressure INIT complete\r\n\r\n", 27, HAL_MAX_DELAY);
 	}else{
-		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n", 18, HAL_MAX_DELAY);
+		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n\r\n", 19, HAL_MAX_DELAY);
 	}
 }
 
+// CZUJNIK WILGOCI -----------------------------------------------------------
 void humidity_sensor_read_id(){
 	uint16_t device_id;		// Zmienna przetrzymująca odczyt z rejestru Device_ID
   HAL_StatusTypeDef status = HDC3022_read_device_id(&device_id);
@@ -263,15 +280,12 @@ int main(void)
 
 	sep(); // Linia do oddzielnenia kolejnych komunikatów UART
 
-  // I2C reseet
-  HDC3022_general_call_reset();
-  // Soft reset czujnika wilgotności
-  HDC3022_soft_reset();
-
+  // CZUJNIK TEMPERATURY -------------------------------------------------------
   // Zczytaj identyfikator i rewizje czujnika temperatury - TMP119
 	temperature_sensor_ID();
 
 
+  // CZUJNIK CIŚNIENIA ---------------------------------------------------------
   // Zczytaj identyfikator i rewizje czujnika ciśnienia - ILPS28QSW
 	pressure_sensor_ID();
   // Zczytaj wartości rejestrów controli czujnika ciśnienia
@@ -280,6 +294,7 @@ int main(void)
   // Inicjalizacja pracy w trybie 1 [Hz]
 	pressure_sensor_init();
 
+  // CZUJNIK WILGOCI -----------------------------------------------------------
   // Zczytaj identyfikator producenta czujnika wilgotności - HDC3022-Q1
   humidity_sensor_read_id();
 
@@ -303,6 +318,7 @@ int main(void)
 
 	// Odczyt ciśnienia z sensora ILPS28QSW
 	pressure_sensor_read_pressure(&pressure);
+  pressure_sensor_read_temp(&temp);
 
 	// Odczyt wilgotności z sensora HDC3022-Q1
   humidity_sensor_read_humidity(&humidity, &temp);
