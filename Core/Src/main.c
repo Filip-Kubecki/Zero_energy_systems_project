@@ -23,8 +23,11 @@
 /* USER CODE BEGIN Includes */
 #include "stm32l1xx_hal_def.h"
 #include "stm32l1xx_hal_uart.h"
-#include "string.h"
 
+#include <stdarg.h>
+#include <string.h>
+
+#include "TCS3720.h"
 #include "ILPS28QSW.h"
 #include "HDC3022-Q1.h"
 #include "TMP119.h"
@@ -69,54 +72,58 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-void uint8_to_bin_str(uint8_t value, char* output){
-    for (int i = 7; i >= 0; i--){
+void uint8_to_bin_str(uint8_t value, char* output_buffer) {
+    for (int i = 7; i >= 0; i--) {
         uint8_t mask = (1 << i);
-
-        if (value & mask){
-        	output[7 - i] = '1';
-        }
-        else{
-        	output[7 - i] = '0';
+        if (value & mask) {
+            output_buffer[7 - i] = '1';
+        } else {
+            output_buffer[7 - i] = '0';
         }
     }
-    output[8] = '\0';
+    output_buffer[8] = '\0';
 }
 
-void sep(){
-	HAL_UART_Transmit(&huart2, (uint8_t*)"------------------\r\n", 20, HAL_MAX_DELAY);
+void sep(const char* value){
+    uint16_t len = strlen(value);
+
+    if (len > 0){
+        HAL_UART_Transmit(&huart2, (uint8_t*)value, len, HAL_MAX_DELAY);
+    }
+
+    HAL_UART_Transmit(&huart2, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
 };
+
+HAL_StatusTypeDef uart_print_check_stat(HAL_StatusTypeDef* status, const char* format, ...){
+  // Sprawdza czy status jest poprawny
+	if (*status != HAL_OK){
+    HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, 32, HAL_MAX_DELAY);
+    return *status;
+  }
+
+  va_list args;
+  va_start(args, format);
+  // Długość ciągu znaków na podstawie ilości argumentów i wpisanie argumentów do bufforu UART
+  int len = vsprintf(UART_TX_BUFFER, format, args);
+  va_end(args);
+
+  // Sprawdza czy podane zostały jakiekolwiek argumenty
+  if (len > 0){
+      // Wyślij sformatowany string o dokładnej długości
+      HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, len, HAL_MAX_DELAY);
+  }
+
+  return HAL_OK;
+}
 
 // CZUJNIK TEMPERATURY ---------------------------------------------------------
 void temperature_sensor_ID(){
-	uint16_t device_id_16b;		// Zmienna przetrzymująca odczyt z rejestru Device_ID
+	uint16_t device_id;		// Zmienna przetrzymująca identyfikator producenta
+	uint8_t rev;		// Zmienna przetrzymująca numer rewizji urządzenia
 
-	HAL_StatusTypeDef status_id = TMP119_read_device_id(&device_id_16b);
+	HAL_StatusTypeDef status_id = TMP119_read_device_id_and_rev(&device_id, &rev);
 
-	if (status_id == HAL_OK){
-	// Usunięcie 3 pierwszych bitów - pozostawienie ID urządzenia
-		uint16_t did  = device_id_16b & 0x1FFF;
-
-		// Nagłówek
-		sprintf(UART_TX_BUFFER, "TMP119:\r\n");
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-
-		// Wysłanie przez UART ID urządzenia
-		sprintf(UART_TX_BUFFER, "Device DID: %X\r\n", did);
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-
-		// Usunięcie pierwszych 13 bitów - pozostawienie numeru rewizji
-		uint16_t rev  = device_id_16b & 0xE000;
-		rev = rev >> 13;
-
-		// Wysłanie przez UART numeru rewizji urzadzenia
-		sprintf(UART_TX_BUFFER, "Device REV: %X\r\n\r\n", rev);
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-	}
-	else{
-		// W przypadku gdy nie uda się odczytać danych przez I2C
-		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n", 18, HAL_MAX_DELAY);
-	}
+  uart_print_check_stat(&status_id, "TMP119:\r\nDevice DID: %X\r\nDevice REV: %X \r\n", device_id, rev);
 };
 
 void temperature_sensor_read_temperature(float* temp){
@@ -137,79 +144,58 @@ void pressure_sensor_ID(){
 	uint8_t device_id;		// Zmienna przetrzymująca odczyt z rejestru Device_ID
 	HAL_StatusTypeDef status_id = ILPS28QSW_read_who_am_i(&device_id);
 
-	if (status_id == HAL_OK){
-		// Nagłówek
-		sprintf(UART_TX_BUFFER, "ILPS28QSW:\r\n");
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-
-		// Wysłanie przez UART ID urządzenia
-		sprintf(UART_TX_BUFFER, "Device DID: 0x%X\r\n\r\n", device_id);
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-	}
-	else{
-		// W przypadku gdy nie uda się odczytać danych przez I2C
-		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n", 18, HAL_MAX_DELAY);
-	}
+  uart_print_check_stat(&status_id, "ILPS28QSW:\r\nDevice DID: 0x%X\r\n", device_id);
 };
 
 void pressure_sensor_ctrl_regs(){
 	uint8_t ctrl_reg_data[3];
 	HAL_StatusTypeDef status_id = ILPS28QSW_read_ctrl_regs(ctrl_reg_data);
 
-	if (status_id == HAL_OK){
-		sprintf(UART_TX_BUFFER, "ILPS28QSW control registers:\r\n");
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
+  char buffer_str0[9];
+  char buffer_str1[9];
+  char buffer_str2[9];
 
-		for (int i = 0; i < 3; ++ i) {
-			char binary_string_buffer[9];
-			uint8_to_bin_str(ctrl_reg_data[i], binary_string_buffer);
-			sprintf(UART_TX_BUFFER, "CTRL_REG%d: %s\r\n", (i+1), binary_string_buffer);
-			HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-		}
-	}
-	else{
-		// W przypadku gdy nie uda się odczytać danych przez I2C
-		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n", 18, HAL_MAX_DELAY);
-	}
+  uint8_to_bin_str(ctrl_reg_data[0], buffer_str0);
+  uint8_to_bin_str(ctrl_reg_data[1], buffer_str1);
+  uint8_to_bin_str(ctrl_reg_data[2], buffer_str2);
+
+  uart_print_check_stat(
+    &status_id,
+    "Control registers:\r\n%s\r\n%s\r\n%s\r\n",
+    buffer_str0,
+    buffer_str1,
+    buffer_str2
+  );
 };
+
+void pressure_sensor_read_pressure_and_temp(float* pressure, float* temp){
+	HAL_StatusTypeDef status = ILPS28QSW_read_pressure(pressure);
+
+  if(status != HAL_OK){
+    sep("ERROR: pressure read I2C error.");
+  }
+
+	status = ILPS28QSW_read_temp(temp);
+
+  uart_print_check_stat(&status, "Pressure: %.2f hPa, %.2f C\r\n", *pressure, *temp);
+}
 
 void pressure_sensor_read_pressure(float* pressure){
 	HAL_StatusTypeDef status = ILPS28QSW_read_pressure(pressure);
-//	HAL_StatusTypeDef status = HAL_OK;
 
-	if (status == HAL_OK){
-		sprintf(UART_TX_BUFFER, "Pressure: %.2f hPa\r\n", *pressure);
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-	}
-	else{
-		// W przypadku gdy nie uda się odczytać danych przez I2C
-		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n", 18, HAL_MAX_DELAY);
-	}
+  uart_print_check_stat(&status, "Pressure: %.2f hPa\r\n", *pressure);
 }
 
 void pressure_sensor_read_temp(float* temp){
 	HAL_StatusTypeDef status = ILPS28QSW_read_temp(temp);
-//	HAL_StatusTypeDef status = HAL_OK;
 
-	if (status == HAL_OK){
-		sprintf(UART_TX_BUFFER, "Temp: %.2f C\r\n", *temp);
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-	}
-	else{
-		// W przypadku gdy nie uda się odczytać danych przez I2C
-		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n", 18, HAL_MAX_DELAY);
-	}
+  uart_print_check_stat(&status, "Temp: %.2f C\r\n", *temp);
 }
 
 void pressure_sensor_init(){
-	HAL_StatusTypeDef status_init = ILPS28QSW_init();
+	HAL_StatusTypeDef status = ILPS28QSW_init();
 
-	if (status_init == HAL_OK){
-		// Jeśli inicjalizacja się nie powiodła, wyświetl błąd
-		HAL_UART_Transmit(&huart2, (uint8_t*)"Pressure INIT complete\r\n\r\n", 27, HAL_MAX_DELAY);
-	}else{
-		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n\r\n", 19, HAL_MAX_DELAY);
-	}
+  uart_print_check_stat(&status, "Pressure INIT complete\r\n");
 }
 
 // CZUJNIK WILGOCI -----------------------------------------------------------
@@ -217,28 +203,21 @@ void humidity_sensor_read_id(){
 	uint16_t device_id;		// Zmienna przetrzymująca odczyt z rejestru Device_ID
   HAL_StatusTypeDef status = HDC3022_read_device_id(&device_id);
 
-  if(status == HAL_OK){
-		sprintf(UART_TX_BUFFER, "HDC3022_Q1:\r\n");
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-
-		sprintf(UART_TX_BUFFER, "Device manufacturer ID: 0x%X\r\n\r\n", device_id);
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-  }else{
-		HAL_UART_Transmit(&huart2, (uint8_t*)"Erro\r\n", 32, HAL_MAX_DELAY);
-  }
+  uart_print_check_stat(&status, "HDC3022-Q1:\r\nDevice manufactureer ID: 0x%X\r\n", device_id);
 }
 
-void humidity_sensor_read_humidity(float* humidity, float* temp){
+void humidity_sensor_read_humidity_and_temp(float* humidity, float* temp){
 	HAL_StatusTypeDef status = HDC3022_read_humidity_and_temperature(humidity, temp);
 
-	if (status == HAL_OK){
-		sprintf(UART_TX_BUFFER, "Humidity: %.2f %% RH, %.2f C \r\n", *humidity, *temp);
-		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
-	}
-	else{
-		// W przypadku gdy nie uda się odczytać danych przez I2C
-		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n", 18, HAL_MAX_DELAY);
-	}
+  uart_print_check_stat(&status, "Humidity: %.2f %% RH, %.2f C \r\n", *humidity, *temp);
+}
+
+// CZUJNIK NATĘŻENIA ŚWIATŁA ------------------------------------------------
+void light_sensor_read_id(){
+	uint8_t device_id;		// Zmienna przetrzymująca odczyt z rejestru Device_ID
+  HAL_StatusTypeDef status = TCS3720_read_device_id(&device_id);
+
+  uart_print_check_stat(&status, "TCS3720:\r\nDevice ID: 0x%X\r\n", device_id);
 }
 
 
@@ -278,12 +257,11 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-	sep(); // Linia do oddzielnenia kolejnych komunikatów UART
+	sep("---------------------------------------");
 
   // CZUJNIK TEMPERATURY -------------------------------------------------------
   // Zczytaj identyfikator i rewizje czujnika temperatury - TMP119
-	temperature_sensor_ID();
-
+	temperature_sensor_ID(); sep("");
 
   // CZUJNIK CIŚNIENIA ---------------------------------------------------------
   // Zczytaj identyfikator i rewizje czujnika ciśnienia - ILPS28QSW
@@ -292,13 +270,16 @@ int main(void)
   // informacje o trybach pracy/pozwala sterować czujnikiem
 	pressure_sensor_ctrl_regs();
   // Inicjalizacja pracy w trybie 1 [Hz]
-	pressure_sensor_init();
+	pressure_sensor_init(); sep("");
 
   // CZUJNIK WILGOCI -----------------------------------------------------------
   // Zczytaj identyfikator producenta czujnika wilgotności - HDC3022-Q1
-  humidity_sensor_read_id();
+  humidity_sensor_read_id(); sep("");
 
-	sep(); // Linia do oddzielnenia kolejnych komunikatów UART
+  // CZUJNIK NATĘŻENIA ŚWIATŁA -------------------------------------------------
+  light_sensor_read_id(); sep("");
+
+	sep("---------------------------------------");
 
   /* USER CODE END 2 */
 
@@ -317,11 +298,13 @@ int main(void)
 	temperature_sensor_read_temperature(&temp);
 
 	// Odczyt ciśnienia z sensora ILPS28QSW
-	pressure_sensor_read_pressure(&pressure);
-  pressure_sensor_read_temp(&temp);
+
+	pressure_sensor_read_pressure_and_temp(&pressure, &temp);
+	// pressure_sensor_read_pressure(&pressure);
+  // pressure_sensor_read_temp(&temp);
 
 	// Odczyt wilgotności z sensora HDC3022-Q1
-  humidity_sensor_read_humidity(&humidity, &temp);
+  humidity_sensor_read_humidity_and_temp(&humidity, &temp);
 
 	HAL_Delay(1000);
   }

@@ -12,6 +12,7 @@
  *
  */
 #include "TMP119.h"
+#include <stdint.h>
 
 // Definicje adresów
 #define TMP119_I2C_ADDR	(0x48 << 1)	// Adres I2C urządzenia
@@ -25,14 +26,16 @@ extern I2C_HandleTypeDef hi2c1;
 
 /**
  ******************************************************************************
- * @brief  Odczytuje 16-bitowy identyfikator urządzenia (Device ID).
- * @note   Odczytuje 2 bajty z rejestru o adresie 0x0F.
- * @param  device_id Wskaźnik do zmiennej (uint16_t), w której zostanie zapisane ID.
+ * @brief  Odczytuje 16-bitowy rejestr ID i rozdziela go na ID urządzenia oraz numer rewizji.
+ * @note   Odczytuje 2 bajty z rejestru o adresie 0x0F (Device ID).
+ * @param  device_id Wskaźnik do zmiennej (uint16_t), w której zostanie zapisane 12-bitowe ID urządzenia.
+ * @param  rev       Wskaźnik do zmiennej (uint8_t), w której zostanie zapisany 3-bitowy numer rewizji.
  * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
  ******************************************************************************
  */
-HAL_StatusTypeDef TMP119_read_device_id(uint16_t* device_id){
+HAL_StatusTypeDef TMP119_read_device_id_and_rev(uint16_t* device_id, uint8_t* rev){
     uint8_t i2c_rx_buffer[2]; // Bufor wejściowy dla komunikacji I2C
+    uint16_t device_id_data;
 
     // Odczytanie 2 bitów z rejestru Device_ID poprzez I2C - odczyt zapisany w buforze
     HAL_StatusTypeDef status = HAL_I2C_Mem_Read(
@@ -46,9 +49,20 @@ HAL_StatusTypeDef TMP119_read_device_id(uint16_t* device_id){
     );
 
     // Jeżeli udało się odczytać dane to zapisz zawartość buforu do pointera
-    if (status == HAL_OK){
-        *device_id = (uint16_t)(i2c_rx_buffer[0] << 8) | i2c_rx_buffer[1];
+    if (status != HAL_OK){
+        return status;
     }
+
+    // Połączenie dwóch odczytanych bajtów w 16 bitową zmienną
+    device_id_data = (uint16_t)(i2c_rx_buffer[0] << 8) | i2c_rx_buffer[1];
+
+    // Konwersja czystych danych na DID i REV
+	// Usunięcie 3 pierwszych bitów - pozostawienie ID urządzenia
+    *device_id  = device_id_data & 0x1FFF;
+
+    // Usunięcie pierwszych 13 bitów - pozostawienie numeru rewizji
+    // I przesunięcie ich na początek zmiennej
+    *rev  = (device_id_data & 0xE000) >> 12;
 
     return status;
 }
