@@ -1,5 +1,6 @@
 /**
- * ILPS28QSW.c
+ ******************************************************************************
+ * @file	ILPS28QSW.c
  * @brief   Plik implementacyjny dla sterownika I2C czujnika ciśnienia ILPS28QSW.
  *
  * @description
@@ -11,7 +12,7 @@
  * Plik ten zawiera logikę do odczytu wielobajtowych rejestrów ciśnienia
  * oraz formuły do konwersji surowych danych (LSB) na fizyczną
  * wartość ciśnienia wyrażoną w hPa (jako float).
- *
+ ******************************************************************************
  */
 #include "ILPS28QSW.h"
 #include <stdint.h>
@@ -39,7 +40,7 @@ extern I2C_HandleTypeDef hi2c1;
  ******************************************************************************
  */
 HAL_StatusTypeDef ILPS28QSW_init(){
-    uint8_t tx_buffer = 0x10; // Powinno być chyba 0x10
+    uint8_t tx_buffer = 0x10;
 
 	// Zapis danych do rejestru - ustalenie trybu pracy
     HAL_StatusTypeDef status = HAL_I2C_Mem_Write(
@@ -154,7 +155,15 @@ HAL_StatusTypeDef ILPS28QSW_read_pressure(float* pressure){
 	return status;
 };
 
-
+/**
+ ******************************************************************************
+ * @brief  Odczytuje 2 bajty surowej temperatury i konwertuje je na °C (float).
+ * @note   Dane są odczytywane z rejestrów TEMP_OUT (0x2B, 0x2C)
+ * i konwertowane na 16-bitową wartość ze znakiem, a następnie dzielone przez 100.
+ * @param  temp Wskaźnik do zmiennej (float), w której zostanie zapisana temperatura w °C.
+ * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ ******************************************************************************
+ */
 HAL_StatusTypeDef ILPS28QSW_read_temp(float* temp){
 	uint8_t temp_reading[2];
 

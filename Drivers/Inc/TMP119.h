@@ -1,4 +1,7 @@
 /**
+ ******************************************************************************
+ * @file    TMP119.h
+ * @brief   Plik nagłówkowy dla sterownika czujnika światła TMP119 I2C.
  * @description
  * Ten sterownik dostarcza interfejsu dla cyfrowego czujnika temperatury
  * TMP119 firmy Texas Instruments.
@@ -8,7 +11,6 @@
  * - Odczyt temperatury i konwersję do wartości zmiennoprzecinkowej (float) w °C.
  ******************************************************************************
  */
-
 #ifndef SRC_TMP119_H_
 #define SRC_TMP119_H_
 

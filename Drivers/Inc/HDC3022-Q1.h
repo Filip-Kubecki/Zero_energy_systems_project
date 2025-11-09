@@ -1,6 +1,6 @@
 /**
- * HDC3022-Q1.h
- *
+ ******************************************************************************
+ * @file    HDC3022-Q1.h
  * @brief   Plik nagłówkowy dla cyfrowego czujnika wilgotności i temperatury TI HDC3022-Q1 I2C.
  *
  * @description
@@ -12,6 +12,7 @@
  * Wspiera on:
  * - Odczyt 16-bitowego ID producenta
  * - Konwersję surowych danych z czujnika do wartości zmiennoprzecinkowych (Wilgotność w %RH)
+ ******************************************************************************
 */
 
 #ifndef INC_HDC3022_Q1_H_

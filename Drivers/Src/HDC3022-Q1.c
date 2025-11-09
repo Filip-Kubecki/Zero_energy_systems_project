@@ -1,6 +1,6 @@
 /**
- * HDC3022-Q1.c
- *
+ ******************************************************************************
+ * @file	 HDC3022-Q1.c
  * @brief   Plik z implementacją funkcji dla czujnika HDC3022-Q1.
  *
  * @description
@@ -8,10 +8,8 @@
  *
  * Obsługuje komunikację poprzez magistralę I2C potrzebną
  * do obsługi sensora. Przekazuje już przetworzone dane.
- *
+ ******************************************************************************
  */
-
-
 #include "HDC3022-Q1.h"
 #include "stm32l1xx_hal_def.h"
 #include <stdint.h>

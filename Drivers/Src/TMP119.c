@@ -1,5 +1,6 @@
 /**
- * TMP119.c
+ ******************************************************************************
+ * @file    TMP119.c
  * @brief   Plik implementacyjny dla sterownika I2C czujnika temperatury TMP119.
  *
  * @description
@@ -9,7 +10,7 @@
  * odczytu danych z czujnika TMP119, w tym odczyt ID urządzenia
  * oraz odczyt temperatury. Zawiera również formułę konwersji
  * surowych danych na stopnie Celsjusza.
- *
+ ******************************************************************************
  */
 #include "TMP119.h"
 #include <stdint.h>

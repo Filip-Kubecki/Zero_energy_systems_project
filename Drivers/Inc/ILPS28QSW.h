@@ -1,5 +1,6 @@
-/*
- * ILPS28QSW.h
+/**
+ ******************************************************************************
+ * @file    ILPS28QSW.h
  * @brief   Plik nagłówkowy dla cyfrowego czujnika ciśnienia (barometru) ILPS28QSW.
  *
  * @description
@@ -11,6 +12,7 @@
  * - Odczyt identyfikatora urządzenia (WHO_AM_I).
  * - Odczyt rejestrów konfiguracyjnych (CTRL_REG 1-3).
  * - Odczyt danych ciśnienia i konwersję do wartości zmiennoprzecinkowej (float).
+ ******************************************************************************
 */
 
 #ifndef ILPS28QSW_H_

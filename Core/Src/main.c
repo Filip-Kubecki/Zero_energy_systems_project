@@ -220,6 +220,12 @@ void light_sensor_read_id(){
   uart_print_check_stat(&status, "TCS3720:\r\nDevice ID: 0x%X\r\n", device_id);
 }
 
+void light_sensor_read_light_intensity(uint16_t* light_intensity){
+  HAL_StatusTypeDef status = TCS3720_read_light_intensity(light_intensity);
+
+  uart_print_check_stat(&status, "Light intensity: %u\r\n", *light_intensity);
+}
+
 
 /* USER CODE END 0 */
 
@@ -289,22 +295,24 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	float	temp		= 0.0f;		// Wartość temperatury
-	float	pressure	= 0.0f;		// Wartość ciśnienia
-	float	humidity	= 0.0f;		// Wartość ciśnienia
+	float	temp		= 0.0f;		        // Wartość temperatury
+	float	pressure	= 0.0f;		      // Wartość ciśnienia
+	float	humidity	= 0.0f;		      // Wartość wilgotności
+	uint16_t light_intensity	= 0;  // Wartość natężenia światła
 
 
 	// Odczyt temperatury z sensora TMP119
 	temperature_sensor_read_temperature(&temp);
 
 	// Odczyt ciśnienia z sensora ILPS28QSW
-
 	pressure_sensor_read_pressure_and_temp(&pressure, &temp);
-	// pressure_sensor_read_pressure(&pressure);
-  // pressure_sensor_read_temp(&temp);
 
 	// Odczyt wilgotności z sensora HDC3022-Q1
   humidity_sensor_read_humidity_and_temp(&humidity, &temp);
+
+  // Odczyt natężenia światła z sensora TCS3720
+  light_sensor_read_light_intensity(&light_intensity);
+  sep("");
 
 	HAL_Delay(1000);
   }
