@@ -1,4 +1,4 @@
-# Monitor Obudowy Fotolitografu (Platforma Testowa)
+# Monitor Wnętrza Obudowy Fotolitografu (Platforma Testowa)
 
 Projekt ten stanowi platformę testową dla systemu monitorowania wnętrza obudowy maszyny fotolitograficznej. Głównym celem jest weryfikacja niskopoziomowej obsługi czujników (odczyty I2C) oraz transmisji zebranych danych przez interfejs UART (jako proof-of-concept).
 
