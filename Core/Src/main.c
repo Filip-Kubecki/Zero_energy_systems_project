@@ -1,8 +1,25 @@
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
+  * @file              : main.c
+  * @brief             : Główny program dla niskoenergetycznego monitora parametrów wnętrza obudowy fotolitografu.
+  *
+  * @description
+  * Ten plik zawiera główną logikę aplikacji dla urządzenia niskiej mocy,
+  * zaprojektowanego do monitorowania kluczowych parametrów środowiskowych
+  * wewnątrz obudowy maszyny fotolitograficznej.
+  *
+  * System okresowo budzi się ze stanu niskiego poboru mocy, aby odczytać
+  * dane z następujących czujników I2C:
+  *
+  * - TMP119:       Precyzyjny pomiar temperatury
+  * - ILPS28QSW:    Ciśnienie baryczne i temperatura
+  * - HDC3022-q1:   Wilgotność i temperatura
+  * - TCS3720:      Natężenie światła (kanał Clear) TODO: niech zaczytuje też kanał 3 - BLUE
+  * - SEN54:        Jakość powietrza (PM, VOC)
+  *
+  * Zebrane dane są następnie przesyłane po UART do urządzenia nadawczego
+  *
   ******************************************************************************
   * @attention
   *
@@ -27,6 +44,7 @@
 #include <stdarg.h>
 #include <string.h>
 
+// Pliki nagłówkowe do driverów sensorów
 #include "TCS3720.h"
 #include "ILPS28QSW.h"
 #include "HDC3022-Q1.h"
@@ -212,7 +230,7 @@ void humidity_sensor_read_humidity_and_temp(float* humidity, float* temp){
   uart_print_check_stat(&status, "Humidity: %.2f %% RH, %.2f C \r\n", *humidity, *temp);
 }
 
-// CZUJNIK NATĘŻENIA ŚWIATŁA ------------------------------------------------
+// CZUJNIK NATĘŻENIA ŚWIATŁA -------------------------------------------------
 void light_sensor_read_id(){
 	uint8_t device_id;		// Zmienna przetrzymująca odczyt z rejestru Device_ID
   HAL_StatusTypeDef status = TCS3720_read_device_id(&device_id);
