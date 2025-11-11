@@ -42,6 +42,7 @@ HAL_StatusTypeDef TCS3720_init();
  */
 HAL_StatusTypeDef TCS3720_read_device_id(uint8_t* device_id);
 
+// TODO: add blue channel reading beside light_sensitivity
 /**
  ******************************************************************************
  * @brief  Wykonuje pojedynczy pomiar natężenia światła (z kanału Clear) na żądanie.

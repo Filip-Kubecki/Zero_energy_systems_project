@@ -16,7 +16,8 @@
 
 #include "stm32l1xx_hal.h"
 #include <sys/types.h>
-// Deklaracje funkcji
+
+// DEKLARACJE FUNKCJI
 
 /**
  ******************************************************************************

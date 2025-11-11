@@ -39,10 +39,12 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "SEN54.h"
+#include "stm32l1xx_hal.h"
 #include "stm32l1xx_hal_def.h"
 #include "stm32l1xx_hal_uart.h"
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <string.h>
 
 // Pliki nagłówkowe do driverów sensorów
@@ -60,7 +62,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define SENSOR_READ_CYCLE_TIME  3000      // Ustala co ile wykonuje się pomiar z czujników
+#define SEN54_WARMUP_TIME       60000     // Czas rozgrzewania się czujnika SEN54 
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -116,7 +119,8 @@ void sep(const char* value){
 HAL_StatusTypeDef uart_print_check_stat(HAL_StatusTypeDef* status, const char* format, ...){
   // Sprawdza czy status jest poprawny
 	if (*status != HAL_OK){
-    HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, 32, HAL_MAX_DELAY);
+    const char* err_msg = "I2C STATUS ERROR\r\n";
+    HAL_UART_Transmit(&huart2, (uint8_t*)err_msg, strlen(err_msg), HAL_MAX_DELAY);
     return *status;
   }
 
@@ -246,24 +250,44 @@ void light_sensor_read_light_intensity(uint16_t* light_intensity){
 }
 
 // Czujnik środowiskowy ------------------------------------------------------
-void environment_sensor_read_all(float* pm1, float* pm2_5, float* pm4, float* pm10, float* voc, float* temp){
+void environment_sensor_read_all(float* pm1, float* pm2_5, float* pm4, float* pm10, float* voc, float* temp, float* humidity){
   HAL_StatusTypeDef status = SEN54_read_measurement_values(
     pm1,
     pm2_5,
     pm4,
     pm10,
     voc,
-    temp
+    temp,
+    humidity
   );
 
-  uart_print_check_stat(&status, "PM1.0: %.2f\r\nPM2.5: %.2f\r\nPM4: %.2f\r\nPM10: %.2f\r\nVOC: %.2f\r\nTEMP: %.2f\r\n",
+  uart_print_check_stat(
+    &status, 
+    "PM1.0: %.2f\r\nPM2.5: %.2f\r\nPM4: %.2f\r\nPM10: %.2f\r\nVOC: %.2f\r\nTEMP: %.2f C\r\nHUMIDITY: %.2f %% RH\r\n",
      *pm1,
      *pm2_5,
      *pm4,
      *pm10,
      *voc,
-     *temp
+     *temp,
+     *humidity
     );
+}
+
+void environment_sensor_wake_up(){
+  HAL_StatusTypeDef status = SEN54_start_measurement();
+
+  if (status != HAL_OK) {
+    sep("SEN54: error on startup");
+  }
+}
+
+void environment_sensor_put_to_sleep(){
+  HAL_StatusTypeDef status = SEN54_stop_measurement();
+
+  if (status != HAL_OK) {
+    sep("SEN54: error when putting to sleep");
+  }
 }
 
 
@@ -302,8 +326,15 @@ int main(void)
   MX_I2C2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  uint32_t last_routine_call_time = 0;
+  uint32_t warmup_time_counter = HAL_GetTick();
 
 	sep("---------------------------------------");
+
+
+  // CZUJNIK ŚRODOWISKOWY -------------------------------------------------------
+  // Włącz czujnik - rozpoczyna cykl mierzenia i rozgrzewanie czujnika (min 1 minuta na rozgrzanie)
+  environment_sensor_wake_up();
 
   // CZUJNIK TEMPERATURY -------------------------------------------------------
   // Zczytaj identyfikator i rewizje czujnika temperatury - TMP119
@@ -335,40 +366,58 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	float	temp		= 0.0f;		        // Wartość temperatury
-	float	pressure	= 0.0f;		      // Wartość ciśnienia
-	float	humidity	= 0.0f;		      // Wartość wilgotności
-	uint16_t light_intensity	= 0;  // Wartość natężenia światła
-  // Czujnik środowiskowy
-  float pm1        = 0.0f;  // Wartość PM1.0 [μg/m^3]
-  float pm2_5      = 0.0f;  // Wartość PM2.5 [μg/m^3]
-  float pm4        = 0.0f;  // Wartość PM4 [μg/m^3]
-  float pm10       = 0.0f;  // Wartość PM10 [μg/m^3]
-  float voc        = 0.0f;  // Wartość VOC w zakresie 0 - 500 gdzie 100 to wartość normalna (baseline)
-                            // baseline jest ustalany na podstawie pomiarów z ostatnich 24 [h] - normalna wartość dla pomieszczenia
 
+    // DEFINIOWANIE ZMIENNYCH --------------------------------------------
+    uint32_t current_time = HAL_GetTick(); 
 
+    float	temp		= 0.0f;		        // Wartość temperatury  [°C]
+    float	pressure	= 0.0f;		      // Wartość ciśnienia    [hPa]
+    float	humidity	= 0.0f;		      // Wartość wilgotności  [%RH]
+    uint16_t light_intensity	= 0;  // Wartość natężenia światła (wartość prosto z czujnika od 0 do 2047 - )
+    // Czujnik środowiskowy
+    float pm1        = 0.0f;  // Wartość PM1.0 [μg/m³]
+    float pm2_5      = 0.0f;  // Wartość PM2.5 [μg/m³]
+    float pm4        = 0.0f;  // Wartość PM4 [μg/m³]
+    float pm10       = 0.0f;  // Wartość PM10 [μg/m³]
+    float voc        = 0.0f;  // Wartość VOC w zakresie 0 - 500 gdzie 100 to wartość normalna (baseline)
+                              // baseline jest ustalany na podstawie pomiarów z ostatnich 24 [h] - normalna wartość dla pomieszczenia
 
+    // KOD --------------------------------------------------------------
 
-	// Odczyt temperatury z sensora TMP119
-	temperature_sensor_read_temperature(&temp);
+    // Główna rutyna - pomiar z czujników na magistrali I2C1
+    if (current_time - last_routine_call_time >= SENSOR_READ_CYCLE_TIME) {
+      // Zapisz obecny czas do zmiennej
+      last_routine_call_time = current_time;
 
-	// Odczyt ciśnienia z sensora ILPS28QSW
-	pressure_sensor_read_pressure_and_temp(&pressure, &temp);
+      // Wykonaj time event - rutyne
+    
+      // Odczyt temperatury z sensora TMP119
+      temperature_sensor_read_temperature(&temp);
 
-	// Odczyt wilgotności z sensora HDC3022-Q1
-  humidity_sensor_read_humidity_and_temp(&humidity, &temp);
+      // Odczyt ciśnienia z sensora ILPS28QSW
+      pressure_sensor_read_pressure_and_temp(&pressure, &temp);
 
-  // Odczyt natężenia światła z sensora TCS3720
-  light_sensor_read_light_intensity(&light_intensity);
-  sep("");
+      // Odczyt wilgotności z sensora HDC3022-Q1
+      humidity_sensor_read_humidity_and_temp(&humidity, &temp);
 
-  // Odczyt wszystkiego z SEN54
-  sep("SEN54:");
-  environment_sensor_read_all(&pm1,&pm2_5, &pm4, &pm10, &voc, &temp);
-  sep("");
+      // Odczyt natężenia światła z sensora TCS3720
+      light_sensor_read_light_intensity(&light_intensity);
+      sep("");
+    }
 
-	HAL_Delay(1000);
+    // Poboczna rutyna - odpowiedzialna za pomiar z czujnika SEN54
+    if(warmup_time_counter != -1 && (current_time - warmup_time_counter) >= SEN54_WARMUP_TIME ){
+      // Zmiana wartości na -1 aby zaznaczyć że poboczna rutyna wykonała się już raz i nie musi wykonywać się ponownie
+      // Aby wykonać ją ponownie trzeba zmienić wartość zmiennej na obecny czas
+      warmup_time_counter = -1;
+
+      // Odczyt wszystkich wartości z czujnika środowiskowego
+      sep("-------------------------------------------------");
+      sep("SEN54:");
+      environment_sensor_read_all(&pm1,&pm2_5, &pm4, &pm10, &voc, &temp, &humidity);
+      environment_sensor_put_to_sleep();
+      sep("-------------------------------------------------");
+    }
   }
   /* USER CODE END 3 */
 }
