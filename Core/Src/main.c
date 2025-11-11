@@ -38,6 +38,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "SEN54.h"
 #include "stm32l1xx_hal_def.h"
 #include "stm32l1xx_hal_uart.h"
 
@@ -244,6 +245,27 @@ void light_sensor_read_light_intensity(uint16_t* light_intensity){
   uart_print_check_stat(&status, "Light intensity: %u\r\n", *light_intensity);
 }
 
+// Czujnik środowiskowy ------------------------------------------------------
+void environment_sensor_read_all(float* pm1, float* pm2_5, float* pm4, float* pm10, float* voc, float* temp){
+  HAL_StatusTypeDef status = SEN54_read_measurement_values(
+    pm1,
+    pm2_5,
+    pm4,
+    pm10,
+    voc,
+    temp
+  );
+
+  uart_print_check_stat(&status, "PM1.0: %.2f\r\nPM2.5: %.2f\r\nPM4: %.2f\r\nPM10: %.2f\r\nVOC: %.2f\r\nTEMP: %.2f\r\n",
+     *pm1,
+     *pm2_5,
+     *pm4,
+     *pm10,
+     *voc,
+     *temp
+    );
+}
+
 
 /* USER CODE END 0 */
 
@@ -317,6 +339,15 @@ int main(void)
 	float	pressure	= 0.0f;		      // Wartość ciśnienia
 	float	humidity	= 0.0f;		      // Wartość wilgotności
 	uint16_t light_intensity	= 0;  // Wartość natężenia światła
+  // Czujnik środowiskowy
+  float pm1        = 0.0f;  // Wartość PM1.0 [μg/m^3]
+  float pm2_5      = 0.0f;  // Wartość PM2.5 [μg/m^3]
+  float pm4        = 0.0f;  // Wartość PM4 [μg/m^3]
+  float pm10       = 0.0f;  // Wartość PM10 [μg/m^3]
+  float voc        = 0.0f;  // Wartość VOC w zakresie 0 - 500 gdzie 100 to wartość normalna (baseline)
+                            // baseline jest ustalany na podstawie pomiarów z ostatnich 24 [h] - normalna wartość dla pomieszczenia
+
+
 
 
 	// Odczyt temperatury z sensora TMP119
@@ -330,6 +361,11 @@ int main(void)
 
   // Odczyt natężenia światła z sensora TCS3720
   light_sensor_read_light_intensity(&light_intensity);
+  sep("");
+
+  // Odczyt wszystkiego z SEN54
+  sep("SEN54:");
+  environment_sensor_read_all(&pm1,&pm2_5, &pm4, &pm10, &voc, &temp);
   sep("");
 
 	HAL_Delay(1000);
