@@ -146,8 +146,20 @@ void temperature_sensor_ID(){
 
 	HAL_StatusTypeDef status_id = TMP119_read_device_id_and_rev(&device_id, &rev);
 
-  uart_print_check_stat(&status_id, "TMP119:\r\nDevice DID: %X\r\nDevice REV: %X \r\n", device_id, rev);
+  uart_print_check_stat(&status_id, "Device DID: %X\r\nDevice REV: %X \r\n", device_id, rev);
 };
+
+void temperature_sensor_init(){
+	HAL_StatusTypeDef status = TMP119_init();
+
+	if (status == HAL_OK){
+		sprintf(UART_TX_BUFFER, "Initialized correctly.\r\n");
+		HAL_UART_Transmit(&huart2, (uint8_t*)UART_TX_BUFFER, strlen(UART_TX_BUFFER), HAL_MAX_DELAY);
+	}
+	else{
+		HAL_UART_Transmit(&huart2, (uint8_t*)"I2C Read Error\r\n", 18, HAL_MAX_DELAY);
+	}
+}
 
 void temperature_sensor_read_temperature(float* temp){
 	HAL_StatusTypeDef status = TMP119_read_temperature(temp);
@@ -338,6 +350,8 @@ int main(void)
 
   // CZUJNIK TEMPERATURY -------------------------------------------------------
   // Zczytaj identyfikator i rewizje czujnika temperatury - TMP119
+  sep("TMP119:");
+  temperature_sensor_init();
 	temperature_sensor_ID(); sep("");
 
   // CZUJNIK CIŚNIENIA ---------------------------------------------------------

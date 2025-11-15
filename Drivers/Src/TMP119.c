@@ -13,17 +13,48 @@
  ******************************************************************************
  */
 #include "TMP119.h"
+#include "stm32l1xx_hal.h"
+#include "stm32l1xx_hal_def.h"
+#include "stm32l1xx_hal_i2c.h"
 #include <stdint.h>
 
 // Definicje adresów
-#define TMP119_I2C_ADDR	(0x48 << 1)	// Adres I2C urządzenia
-#define TMP119_REG_TEMP	0x00		// Adres rejestru przechowującym wartość temperatury
-#define TMP119_DEV_ID	0x0F		// Adres rejestru zawierającego
+#define TMP119_I2C_ADDR     (0x48 << 1)	// Adres I2C urządzenia
+#define TMP119_REG_TEMP     0x00		// Adres rejestru przechowującym wartość temperatury
+#define TMP119_CONF_REG     0x01		// Adres rejestru zawierającego konfigurację urządzenia
+#define TMP119_DEV_ID	    0x0F		// Adres rejestru zawierającego
 
 
 // Powiązanie z handlerem I2C znajdującym się w pliku main.c
 // Żeby nie zgłupiał bo nie wie gdzie co jest
 extern I2C_HandleTypeDef hi2c1;
+
+/**
+ ******************************************************************************
+ * @brief  Inicjalizuje czujnik TMP119, ustawiając go w tryb uśpienia (Shutdown).
+ * @note   Zapisuje do rejestru konfiguracyjnego (0x01) wartość 0x0400,
+ * ustawiając bity MOD[1:0] na 01 (Shutdown Mode).
+ * Jest to wymagane przed użyciem pomiarów "one-shot".
+ * @retval HAL_StatusTypeDef: HAL_OK (sukces) lub kod błędu HAL.
+ ******************************************************************************
+ */
+HAL_StatusTypeDef TMP119_init(){
+    uint8_t tx_buffer[2] = {0x04, 0x00}; // Bufor wyjściowy
+    HAL_StatusTypeDef status;
+
+    // Ustawia tryb pracy sensora jako shutdown
+    status = HAL_I2C_Mem_Write(
+        &hi2c1,
+         TMP119_I2C_ADDR, 
+         TMP119_CONF_REG, 
+         I2C_MEMADD_SIZE_8BIT, 
+         tx_buffer, 
+         2,
+        HAL_MAX_DELAY
+    );
+
+    return status;
+}
 
 /**
  ******************************************************************************
@@ -58,40 +89,70 @@ HAL_StatusTypeDef TMP119_read_device_id_and_rev(uint16_t* device_id, uint8_t* re
     device_id_data = (uint16_t)(i2c_rx_buffer[0] << 8) | i2c_rx_buffer[1];
 
     // Konwersja czystych danych na DID i REV
-	// Usunięcie 3 pierwszych bitów - pozostawienie ID urządzenia
-    *device_id  = device_id_data & 0x1FFF;
+	// Usunięcie 4 pierwszych bitów - pozostawienie ID urządzenia
+    *device_id  = device_id_data & 0x0FFF;
 
-    // Usunięcie pierwszych 13 bitów - pozostawienie numeru rewizji
+    // Usunięcie pierwszych 12 bitów - pozostawienie numeru rewizji
     // I przesunięcie ich na początek zmiennej
-    *rev  = (device_id_data & 0xE000) >> 12;
+    *rev  = (device_id_data & 0xF000) >> 12;
 
     return status;
 }
 
 /**
  ******************************************************************************
- * @brief  Odczytuje 16-bitową surową wartość temperatury i konwertuje ją na °C (float).
- * @note   Odczytuje 2 bajty z rejestru temperatury (0x00) i mnoży wynik przez 0.0078125.
+ * @brief  Wykonuje pojedynczy pomiar temperatury w trybie "One-Shot".
+ * @note   1. Budzi czujnik, wysyłając komendę "One-Shot" (0x0C00) do rejestru konfiguracyjnego.
+ * 2. Czeka 16ms (blokująco) na zakończenie konwersji (czas konwersji to 15.5ms).
+ * 3. Odczytuje 16-bitową wartość z rejestru temperatury (0x00).
+ * 4. Czujnik automatycznie wraca do trybu Shutdown po pomiarze.
  * @param  temperature_c Wskaźnik do zmiennej (float), w której zostanie zapisana temperatura w °C.
- * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
+ * @retval HAL_StatusTypeDef: HAL_OK (sukces) lub kod błędu HAL.
  ******************************************************************************
  */
 HAL_StatusTypeDef TMP119_read_temperature(float* temperature_c){
-    uint8_t i2c_rx_buffer[2];
+    uint8_t rx_buffer[2];
+    uint8_t tx_buffer[2] = {0x00, 0x00};
+    HAL_StatusTypeDef status;
 
-    // Odczytanie 2 bitów z rejestru Device_ID poprzez I2C - odczyt zapisany w buforze
-	HAL_StatusTypeDef status = HAL_I2C_Mem_Read(
+    
+    tx_buffer[0] = 0x0C; // Bufor wyjściowy - komenda one shot
+    // Zapisz wartość 11 do rejestru MOD - wywołuje pojedyńczy pomiar
+    status = HAL_I2C_Mem_Write(
+        &hi2c1,
+         TMP119_I2C_ADDR, 
+         TMP119_CONF_REG, 
+         I2C_MEMADD_SIZE_8BIT, 
+         tx_buffer, 
+         2,
+        HAL_MAX_DELAY
+    );
+
+    if (status != HAL_OK) {
+        return status;
+    }
+
+    // TODO: make it non-blocking in the future
+    // Odczekaj na konwersję
+    HAL_Delay(16);
+
+    // Odczytaj temperaturę z rejestru Temp_Result
+	status = HAL_I2C_Mem_Read(
 		&hi2c1,
 		TMP119_I2C_ADDR,
 		TMP119_REG_TEMP,
 		I2C_MEMADD_SIZE_8BIT,
-		i2c_rx_buffer,
+		rx_buffer,
 		2,
 		HAL_MAX_DELAY
 	);
 
+    if (status != HAL_OK) {
+        return status;
+    }
+
     if (status == HAL_OK){
-        int16_t raw_temp = (int16_t)(i2c_rx_buffer[0] << 8) | i2c_rx_buffer[1];
+        int16_t raw_temp = (int16_t)(rx_buffer[0] << 8) | rx_buffer[1];
 
         // Konwersja do stopni celciusza - zaciągnięta z noty katalogowej TMP119
         *temperature_c = raw_temp * 0.0078125f;
