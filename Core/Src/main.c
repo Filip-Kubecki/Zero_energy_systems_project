@@ -41,6 +41,8 @@
 #include "SEN54.h"
 #include "stm32l1xx_hal.h"
 #include "stm32l1xx_hal_def.h"
+#include "stm32l1xx_hal_flash_ex.h"
+#include "stm32l1xx_hal_pwr.h"
 #include "stm32l1xx_hal_uart.h"
 
 #include <stdarg.h>
@@ -75,6 +77,8 @@
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c2;
 
+RTC_HandleTypeDef hrtc;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -87,6 +91,7 @@ static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_RTC_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -337,7 +342,66 @@ int main(void)
   MX_I2C1_Init();
   MX_I2C2_Init();
   MX_USART2_UART_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
+// Disable clocks for ALL peripherals you are not using
+// --- AHB Bus Peripherals ---
+  // __HAL_RCC_GPIOA_CLK_DISABLE(); // USED (USART2, LD2, Debug)
+  // __HAL_RCC_GPIOB_CLK_DISABLE(); // USED (I2C1, I2C2)
+  // __HAL_RCC_GPIOC_CLK_DISABLE(); // USED (B1 Button, LSE)
+  __HAL_RCC_GPIOD_CLK_DISABLE(); // Not used
+  __HAL_RCC_GPIOE_CLK_DISABLE(); // Not used
+  __HAL_RCC_GPIOH_CLK_DISABLE(); // Not used
+  __HAL_RCC_GPIOF_CLK_DISABLE(); // Not used
+  __HAL_RCC_GPIOG_CLK_DISABLE(); // Not used
+  
+  __HAL_RCC_DMA1_CLK_DISABLE();  // Not used
+  __HAL_RCC_CRC_CLK_DISABLE();   // Not used
+  
+  // Disable Flash interface clock (CPU will run from cache)
+  __HAL_RCC_FLITF_CLK_DISABLE();
+
+
+  // --- APB1 Bus Peripherals ---
+  __HAL_RCC_TIM2_CLK_DISABLE();
+  __HAL_RCC_TIM3_CLK_DISABLE();
+  __HAL_RCC_TIM4_CLK_DISABLE();
+  __HAL_RCC_TIM5_CLK_DISABLE();
+  __HAL_RCC_TIM6_CLK_DISABLE();
+  __HAL_RCC_TIM7_CLK_DISABLE();
+  
+  __HAL_RCC_WWDG_CLK_DISABLE();  // Window Watchdog
+  __HAL_RCC_SPI2_CLK_DISABLE();
+  __HAL_RCC_SPI3_CLK_DISABLE();
+  
+  // __HAL_RCC_USART2_CLK_DISABLE(); // USED (Communication)
+  __HAL_RCC_USART3_CLK_DISABLE();
+  __HAL_RCC_UART4_CLK_DISABLE();
+  __HAL_RCC_UART5_CLK_DISABLE();
+  
+  // __HAL_RCC_I2C1_CLK_DISABLE(); // USED (Sensors)
+  // __HAL_RCC_I2C2_CLK_DISABLE(); // USED (Sensors)
+  
+  __HAL_RCC_USB_CLK_DISABLE();
+  __HAL_RCC_DAC_CLK_DISABLE();
+  // __HAL_RCC_PWR_CLK_ENABLE();  // USED (For STOP Mode)
+  // __HAL_RCC_COMP_CLK_ENABLE(); // USED (Part of SYS)
+
+
+  // --- APB2 Bus Peripherals ---
+  // __HAL_RCC_SYSCFG_CLK_ENABLE(); // USED (For EXTI / Interrupts)
+  __HAL_RCC_TIM9_CLK_DISABLE();
+  __HAL_RCC_TIM10_CLK_DISABLE();
+  __HAL_RCC_TIM11_CLK_DISABLE();
+  
+  __HAL_RCC_ADC1_CLK_DISABLE();
+  __HAL_RCC_SPI1_CLK_DISABLE();
+  __HAL_RCC_USART1_CLK_DISABLE();
+  
+  // Power down the Flash memory during STOP mode
+  __HAL_FLASH_SLEEP_POWERDOWN_ENABLE();
+
+  // Po konfiguracji mikrokontrolera
   uint32_t last_routine_call_time = 0;
   uint32_t warmup_time_counter = HAL_GetTick();
 
@@ -399,9 +463,9 @@ int main(void)
     // KOD --------------------------------------------------------------
 
     // Główna rutyna - pomiar z czujników na magistrali I2C1
-    if (current_time - last_routine_call_time >= SENSOR_READ_CYCLE_TIME) {
+    // if (current_time - last_routine_call_time >= SENSOR_READ_CYCLE_TIME) {
       // Zapisz obecny czas do zmiennej
-      last_routine_call_time = current_time;
+      // last_routine_call_time = current_time;
 
       // Wykonaj time event - rutyne
     
@@ -417,7 +481,7 @@ int main(void)
       // Odczyt natężenia światła z sensora TCS3720
       light_sensor_read_light_intensity(&light_intensity);
       sep("");
-    }
+    // }
 
     // Poboczna rutyna - odpowiedzialna za pomiar z czujnika SEN54
     if(warmup_time_counter != -1 && (current_time - warmup_time_counter) >= SEN54_WARMUP_TIME ){
@@ -432,6 +496,30 @@ int main(void)
       environment_sensor_put_to_sleep();
       sep("-------------------------------------------------");
     }
+
+    // Sprawdzenie czy zakończyła się transmisja UART
+    while(HAL_UART_GetState(&huart2) == HAL_UART_STATE_BUSY_TX);
+
+    // === PREPARE FOR SLEEP =======================
+    // Zatrzymaj SysTick - inaczej po 1ms wszystko znowu się obudzi
+    HAL_SuspendTick();
+    // Ustawia alarm zegara RTC na 10s - 0x500B
+    HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0x500B, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+
+    // === STOP MODE ==============================
+    // Ustawianie trybu STOP na mikrokontrolerze
+    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+
+    // === WAKE UP ===============================
+    // Reinicjalizacja zegarów mikrokontrolera - bez tego nie zadziałą UART i I2C
+    // Po wybudzeniu jedyne zegary jakie działają to te niskoenergetyczne (MSI)
+    // jednak większość magistrali nie jest w stanie operować przy tej prędkości
+    // i wymaga szybszych zegarów które zostały uśpione
+    SystemClock_Config();
+    // Przywraca SysTick
+    HAL_ResumeTick();
+    // Wyłącza zegar RTC aby ponownie nie wysyłał przerwania po określonym czasie
+    HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
   }
   /* USER CODE END 3 */
 }
@@ -444,6 +532,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Configure the main internal regulator output voltage
   */
@@ -452,13 +541,12 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;
-  RCC_OscInitStruct.PLL.PLLDIV = RCC_PLL_DIV3;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
+  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+  RCC_OscInitStruct.MSICalibrationValue = 0;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -468,12 +556,18 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }
@@ -544,6 +638,76 @@ static void MX_I2C2_Init(void)
   /* USER CODE BEGIN I2C2_Init 2 */
 
   /* USER CODE END I2C2_Init 2 */
+
+}
+
+/**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(void)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  RTC_TimeTypeDef sTime = {0};
+  RTC_DateTypeDef sDate = {0};
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /* USER CODE BEGIN Check_RTC_BKUP */
+
+  /* USER CODE END Check_RTC_BKUP */
+
+  /** Initialize RTC and set the Time and Date
+  */
+  sTime.Hours = 0x0;
+  sTime.Minutes = 0x0;
+  sTime.Seconds = 0x0;
+  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
+  sDate.Month = RTC_MONTH_JANUARY;
+  sDate.Date = 0x1;
+  sDate.Year = 0x0;
+
+  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Enable the WakeUp
+  */
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
 
 }
 
