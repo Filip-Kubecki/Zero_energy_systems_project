@@ -20,7 +20,7 @@
 // Definicje komend
 #define HDC3022_REG_MANUFACTURER_ID	{0x37, 0x81}	// Zczytaj identyfikator producenta (powinno wynosić 0x3000)
 #define HDC3022_CMD_TRIG_MEAS_LPM3	{0x24, 0xFF}	// Zczytaj temperature i wilgotność w trybie
-													// on demand LPM3 (najniższy pobór energii)
+													// trigger on demand LPM3 (najniższy pobór energii)
 #define HDC3022_CMD_SOFT_RESET		{0x30, 0xA2}
 
 #define HDC3022_MEAS_DELAY_LPM3 5

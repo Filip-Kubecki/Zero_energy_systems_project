@@ -15,12 +15,14 @@
  ******************************************************************************
  */
 #include "ILPS28QSW.h"
+#include "stm32l1xx_hal_def.h"
 #include <stdint.h>
 
 #define ILPS28QSW_I2C_ADDR				(0x5C << 1)	// Adres I2C urządzenia
-#define ILPS28QSW_
+#define ILPS28QSW_STATUS_REG			0x27		// Rejestr statusu gotowości
 #define ILPS28QSW_WHO_AM_I				0x0F		// Adres rejestru zawierającego numer ID urządzenia (powinno wynosić)
 #define ILPS28QSW_CTRL_REG_START		0x10		// Adres rejestru CTRL_REG1 - kolejne 3 rejestry to rejestry CTRL1-3
+#define ILPS28QSW_STATUS				0x11		// Rejestr zawierający status pomiaru ciśnienia i temperatury
 #define ILPS28QSW_PRESS_OUT_REG_START	0x28		// Adres pierwszego rejestru zawierającego odczyt ciśnienia
 													// kolejne 2 rejestry zawierają kolejne części odczytu (wyższe bity)
 													// [PRESS_OUT_H, PRESS_OUT_L, PRESS_OUT_XL]
@@ -28,19 +30,22 @@
 													// kolejny rejestr zawiera kolejną część odczytu
 													// [TEMP_OUT_L, TEMP_OUT_H]
 
+#define ILPS28QSW_TIMEOUT				20			// Maksymalny czas oczekiwania na zmianę wartości w rejestrze STATUS
+
 // Powiązanie z handlerem I2C znajdującym się w pliku main.c
 // Oznajmia że handler komunikacji I2C istnieje ale w innym pliku - w tym przypadku w main.c
 extern I2C_HandleTypeDef hi2c1;
 
+
 /**
  ******************************************************************************
- * @brief  Inicjalizuje czujnik i ustawia go w tryb pomiaru ciągłego z częstotliwością 1 Hz.
- * @note   Zapisuje wartość 0x10 (tryb 1 Hz) do rejestru CTRL_REG1 (0x10).
+ * @brief  Inicjuje czujnik i ustawia go w tryb uśpienia.
+ * @note   Zapisuje wartość 0x00 (tryb Power-Down) do rejestru CTRL_REG1 (0x10).
  * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
  ******************************************************************************
  */
 HAL_StatusTypeDef ILPS28QSW_init(){
-    uint8_t tx_buffer = 0x10;
+    uint8_t tx_buffer = 0x00;
 
 	// Zapis danych do rejestru - ustalenie trybu pracy
     HAL_StatusTypeDef status = HAL_I2C_Mem_Write(
@@ -110,18 +115,58 @@ HAL_StatusTypeDef ILPS28QSW_read_ctrl_regs(uint8_t* ctrl_reg_data){
 
 /**
  ******************************************************************************
- * @brief  Odczytuje 3 bajty surowego ciśnienia i konwertuje je na hPa (float).
- * @note   Dane są odczytywane z rejestrów PRESS_OUT (0x28, 0x29, 0x2A)
- * i konwertowane na 24-bitową wartość ze znakiem. Później przelicza się
- * wartość na hPa dzieląc wartość 24-bitową przez 4096.
+ * @brief  Odczytuje surowe ciśnienie w trybie one-shot i konwertuje je na hPa (float).
+ * @note   Odczytuje rejestry PRESS_OUT (od 0x28) i przelicza na wartość fizyczną.
  * @param  pressure Wskaźnik do zmiennej (float), w której zostanie zapisane ciśnienie w hPa.
  * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
  ******************************************************************************
  */
 HAL_StatusTypeDef ILPS28QSW_read_pressure(float* pressure){
 	uint8_t pressure_reading[3];
+	HAL_StatusTypeDef status;
+	uint8_t ONE_SHOT_COMMAND = 0x01;
+	uint32_t start_tick;
+	uint8_t status_buffer;
 
-	HAL_StatusTypeDef status = HAL_I2C_Mem_Read(
+	// Wywołaj pojedyńczy pomiar ustawiając bit ONE_SHOT na 1
+	status = HAL_I2C_Mem_Write(
+		&hi2c1,
+		ILPS28QSW_I2C_ADDR, 
+		ILPS28QSW_CTRL_REG_START+0x01, // CRE_REG_2
+		I2C_MEMADD_SIZE_8BIT,
+		&ONE_SHOT_COMMAND, 
+		1, 
+		HAL_MAX_DELAY
+		);
+
+    if (status != HAL_OK) return status;
+
+	// Odczytywanie rejestru STATUS - oczekiwanie na wyniki pomiaru
+    start_tick = HAL_GetTick();
+    while (1){
+        status = HAL_I2C_Mem_Read(&hi2c1,
+			ILPS28QSW_I2C_ADDR,
+			ILPS28QSW_STATUS_REG, 
+			I2C_MEMADD_SIZE_8BIT,
+			&status_buffer,
+			1,
+			HAL_MAX_DELAY
+			);
+        if (status != HAL_OK) return status;
+
+        // Sprawdź bit P_DA - pressure data
+		// Jeżeli jest równy 1 to znaczy że dane sa gotowe do odczytu
+        if (status_buffer & 0x02) {
+            break; // Dane są gotowe, wyjdź z pętli czekania
+        }
+
+        // Sprawdź Timeout (zabezpieczenie przed zawieszeniem)
+        if ((HAL_GetTick() - start_tick) > ILPS28QSW_TIMEOUT) {
+            return HAL_TIMEOUT;
+        }
+    }
+
+	status = HAL_I2C_Mem_Read(
 		&hi2c1,
 		ILPS28QSW_I2C_ADDR,
 		ILPS28QSW_PRESS_OUT_REG_START, // Zacznij od (LSB)
@@ -157,17 +202,58 @@ HAL_StatusTypeDef ILPS28QSW_read_pressure(float* pressure){
 
 /**
  ******************************************************************************
- * @brief  Odczytuje 2 bajty surowej temperatury i konwertuje je na °C (float).
- * @note   Dane są odczytywane z rejestrów TEMP_OUT (0x2B, 0x2C)
- * i konwertowane na 16-bitową wartość ze znakiem, a następnie dzielone przez 100.
- * @param  temp Wskaźnik do zmiennej (float), w której zostanie zapisana temperatura w °C.
+ * @brief  Odczytuje surową temperaturę w trybie one-shot i konwertuje ją na deg C (float).
+ * @note   Odczytuje rejestry TEMP_OUT (od 0x2B) i przelicza na wartość fizyczną.
+ * @param  temp Wskaźnik do zmiennej (float), w której zostanie zapisana temperatura w deg C.
  * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
  ******************************************************************************
  */
 HAL_StatusTypeDef ILPS28QSW_read_temp(float* temp){
 	uint8_t temp_reading[2];
+	HAL_StatusTypeDef status;
+	uint8_t ONE_SHOT_COMMAND = 0x01;
+	uint32_t start_tick;
+	uint8_t status_buffer;
 
-	HAL_StatusTypeDef status = HAL_I2C_Mem_Read(
+	// Wywołaj pojedyńczy pomiar ustawiając bit ONE_SHOT na 1
+	status = HAL_I2C_Mem_Write(
+		&hi2c1,
+		ILPS28QSW_I2C_ADDR, 
+		ILPS28QSW_CTRL_REG_START+0x01, // CRE_REG_2
+		I2C_MEMADD_SIZE_8BIT,
+		&ONE_SHOT_COMMAND, 
+		1, 
+		HAL_MAX_DELAY
+		);
+
+    if (status != HAL_OK) return status;
+
+	// Odczytywanie rejestru STATUS - oczekiwanie na wyniki pomiaru
+    start_tick = HAL_GetTick();
+    while (1){
+        status = HAL_I2C_Mem_Read(&hi2c1,
+			ILPS28QSW_I2C_ADDR,
+			ILPS28QSW_STATUS_REG, 
+			I2C_MEMADD_SIZE_8BIT,
+			&status_buffer,
+			1,
+			HAL_MAX_DELAY
+			);
+        if (status != HAL_OK) return status;
+
+        // Sprawdź bit T_DA - dane temperatury
+		// Jeżeli jest równy 1 to znaczy że dane sa gotowe do odczytu
+        if (status_buffer & 0x01) {
+            break; // Dane są gotowe, wyjdź z pętli czekania
+        }
+
+        // Sprawdź Timeout (zabezpieczenie przed zawieszeniem)
+        if ((HAL_GetTick() - start_tick) > ILPS28QSW_TIMEOUT) {
+            return HAL_TIMEOUT;
+        }
+    }
+
+	status = HAL_I2C_Mem_Read(
 		&hi2c1,
 		ILPS28QSW_I2C_ADDR,
 		ILPS28QSW_TEMP_OUT_REGS,

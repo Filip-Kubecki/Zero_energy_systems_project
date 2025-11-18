@@ -402,7 +402,7 @@ int main(void)
   __HAL_FLASH_SLEEP_POWERDOWN_ENABLE();
 
   // Po konfiguracji mikrokontrolera
-  uint32_t last_routine_call_time = 0;
+  // uint32_t last_routine_call_time = 0;
   uint32_t warmup_time_counter = HAL_GetTick();
 
 	sep("---------------------------------------");

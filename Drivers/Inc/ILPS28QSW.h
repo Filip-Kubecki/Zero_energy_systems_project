@@ -25,8 +25,8 @@
 
 /**
  ******************************************************************************
- * @brief  Inicjuje czujnik i ustawia go w tryb pomiaru ciągłego 1 Hz.
- * @note   Zapisuje domyślną konfigurację (tryb 1 Hz) do rejestru CTRL_REG1.
+ * @brief  Inicjuje czujnik i ustawia go w tryb uśpienia.
+ * @note   Zapisuje domyślną konfigurację (tryb Power-Down) do rejestru CTRL_REG1.
  * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
  ******************************************************************************
  */
@@ -54,7 +54,7 @@ HAL_StatusTypeDef ILPS28QSW_read_ctrl_regs(uint8_t* ctrl_reg_data);
 
 /**
  ******************************************************************************
- * @brief  Odczytuje surowe ciśnienie (3 bajty) i konwertuje je na hPa (float).
+ * @brief  Odczytuje surowe ciśnienie w trybie one-shot i konwertuje je na hPa (float).
  * @note   Odczytuje rejestry PRESS_OUT (od 0x28) i przelicza na wartość fizyczną.
  * @param  pressure Wskaźnik do zmiennej (float), w której zostanie zapisane ciśnienie w hPa.
  * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
@@ -64,7 +64,7 @@ HAL_StatusTypeDef ILPS28QSW_read_pressure(float* pressure);
 
 /**
  ******************************************************************************
- * @brief  Odczytuje surową temperaturę (2 bajty) i konwertuje ją na deg C (float).
+ * @brief  Odczytuje surową temperaturę w trybie one-shot i konwertuje ją na deg C (float).
  * @note   Odczytuje rejestry TEMP_OUT (od 0x2B) i przelicza na wartość fizyczną.
  * @param  temp Wskaźnik do zmiennej (float), w której zostanie zapisana temperatura w deg C.
  * @retval HAL_StatusTypeDef: HAL_OK w przypadku sukcesu, lub kod błędu HAL.
